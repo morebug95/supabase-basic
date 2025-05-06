@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { createUserProfile } from "@/lib/user-service";
 
 export default function Login() {
   const router = useRouter();
@@ -11,6 +12,20 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Check if already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        router.push("/blog/dashboard");
+      }
+    };
+
+    checkSession();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +43,23 @@ export default function Login() {
       }
 
       if (data.user) {
-        router.push("/");
+        // Verify the session was created properly
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        if (!sessionData.session) {
+          throw new Error("Failed to create session. Please try again.");
+        }
+
+        // Create a profile directly (not using API route)
+        try {
+          await createUserProfile(data.user.id);
+          console.log("Profile created or verified after login");
+        } catch (profileError) {
+          console.error("Error creating profile (non-blocking):", profileError);
+        }
+
+        // Redirect to the dashboard
+        router.push("/blog/dashboard");
       }
     } catch (error: unknown) {
       setError(
